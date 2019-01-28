@@ -7,6 +7,7 @@ import (
 	"runtime"
 	"strings"
 
+	prefixed "github.com/gz-c/logrus-prefixed-formatter"
 	"github.com/sirupsen/logrus"
 )
 
@@ -15,11 +16,23 @@ var baseLogger = logger{entry: logrus.NewEntry(origLogger)}
 var disabled bool
 
 func init() {
-	formater := logrus.TextFormatter{
+	formatter := prefixed.TextFormatter{
 		FullTimestamp:   true,
 		TimestampFormat: "02/01|15:04:05",
+		SpacePadding:    40,
 	}
-	origLogger.SetFormatter(&formater)
+	formatter.SetColorScheme(&prefixed.ColorScheme{
+		InfoLevelStyle:   "green",
+		WarnLevelStyle:   "orange",
+		ErrorLevelStyle:  "red",
+		FatalLevelStyle:  "red",
+		PanicLevelStyle:  "red",
+		DebugLevelStyle:  "blue",
+		PrefixStyle:      "cyan",
+		CallContextStyle: "white",
+		TimestampStyle:   "white+h",
+	})
+	origLogger.SetFormatter(&formatter)
 }
 
 // Fields is a wrapper for logrus.Fields
@@ -52,21 +65,20 @@ type logger struct {
 func (l logger) sourced(source bool) *logrus.Entry {
 	e := l.entry
 
-	e = e.WithField("module", "knx")
-
 	if !source {
 		return e
 	}
 
 	pc, file, line, ok := runtime.Caller(2)
 	if !ok {
-		e = e.WithField("source", "<???>")
+		e = e.WithField("file", "<???>")
 		return e
 	}
 
 	slash := strings.LastIndex(file, "/")
 	file = file[slash+1:]
-	e = e.WithField("source", fmt.Sprintf("%s:%d", file, line))
+	e = e.WithField("file", file)
+	e = e.WithField("line", line)
 
 	if f := runtime.FuncForPC(pc); f != nil {
 		e = e.WithField("func", f.Name())
@@ -241,4 +253,9 @@ func WithMessage(msg string) Logger {
 // WithMessagef wrapper
 func WithMessagef(format string, args ...interface{}) Logger {
 	return baseLogger.WithMessagef(format, args...)
+}
+
+// Module wrapper
+func Module(name string) Logger {
+	return baseLogger.WithField("prefix", name)
 }
