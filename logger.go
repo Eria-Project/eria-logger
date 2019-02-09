@@ -2,8 +2,10 @@ package logger
 
 import (
 	"errors"
+	"flag"
 	"fmt"
 	"io/ioutil"
+	"os"
 	"runtime"
 	"strings"
 
@@ -11,15 +13,23 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-var origLogger = logrus.New()
-var baseLogger = logger{entry: logrus.NewEntry(origLogger)}
-var disabled bool
+var (
+	_origLogger *logrus.Logger
+	_baseLogger logger
+	_logLevel   *string
+	_logFile    *string
+	_paramsSet  bool
+)
 
 func init() {
+	_origLogger = logrus.New()
+	_baseLogger = logger{entry: logrus.NewEntry(_origLogger)}
+	_logLevel = flag.String("log", "info", "log level [info, debug, error, warn, no]")
+	_logFile = flag.String("log-file", "", "log file path (default to stderr")
+
 	formatter := prefixed.TextFormatter{
 		FullTimestamp:   true,
 		TimestampFormat: "02/01|15:04:05",
-		SpacePadding:    40,
 	}
 	formatter.SetColorScheme(&prefixed.ColorScheme{
 		InfoLevelStyle:   "green",
@@ -32,7 +42,25 @@ func init() {
 		CallContextStyle: "white",
 		TimestampStyle:   "white+h",
 	})
-	origLogger.SetFormatter(&formatter)
+	_origLogger.SetFormatter(&formatter)
+
+}
+
+func setParams() {
+	if !_paramsSet {
+		if !flag.Parsed() {
+			flag.Parse()
+		}
+
+		if *_logFile != "" {
+			SetFile(*_logFile)
+		}
+		SetLevel(*_logLevel)
+
+		Module("logger").WithField("path", *_logFile).Info("Set log file")
+		Module("logger").WithField("level", *_logLevel).Info("Set log level")
+		_paramsSet = true
+	}
 }
 
 // Fields is a wrapper for logrus.Fields
@@ -91,14 +119,23 @@ func (l logger) sourced(source bool) *logrus.Entry {
 func SetLevel(level string) {
 	logLevel, err := logrus.ParseLevel(level)
 	if level == "no" {
-		disabled = true
-		origLogger.Out = ioutil.Discard
+		_origLogger.Out = ioutil.Discard
 	} else {
 		if err != nil {
-			origLogger.WithField("level", level).Warn(err)
+			_origLogger.WithField("level", level).Warn(err)
 		} else {
-			origLogger.SetLevel(logLevel)
+			_origLogger.SetLevel(logLevel)
 		}
+	}
+}
+
+// SetFile set the logger to output to file
+func SetFile(path string) {
+	file, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0666)
+	if err == nil {
+		_origLogger.SetOutput(file)
+	} else {
+		Module("logger").Info("Failed to log to file, using default stderr")
 	}
 }
 
@@ -170,92 +207,7 @@ func (l logger) WithMessagef(format string, args ...interface{}) Logger {
 	return logger{l.entry.WithError(fmt.Errorf(format, args...))}
 }
 
-// Trace wrapper
-func Trace(args ...interface{}) {
-	baseLogger.sourced(false).Trace(args...)
-}
-
-// Tracef wrapper
-func Tracef(format string, args ...interface{}) {
-	baseLogger.sourced(false).Tracef(format, args...)
-}
-
-// Debug wrapper
-func Debug(args ...interface{}) {
-	baseLogger.sourced(false).Debug(args...)
-}
-
-// Debugf wrapper
-func Debugf(format string, args ...interface{}) {
-	baseLogger.sourced(false).Debugf(format, args...)
-}
-
-// Info wrapper
-func Info(args ...interface{}) {
-	baseLogger.sourced(false).Info(args...)
-}
-
-// Infof wrapper
-func Infof(format string, args ...interface{}) {
-	baseLogger.sourced(false).Infof(format, args...)
-}
-
-// Warn wrapper
-func Warn(args ...interface{}) {
-	baseLogger.sourced(false).Warn(args...)
-}
-
-// Warnf wrapper
-func Warnf(format string, args ...interface{}) {
-	baseLogger.sourced(false).Warnf(format, args...)
-}
-
-// Error wrapper
-func Error(args ...interface{}) {
-	baseLogger.sourced(true).Error(args...)
-}
-
-// Errorf wrapper
-func Errorf(format string, args ...interface{}) {
-	baseLogger.sourced(true).Errorf(format, args...)
-}
-
-// Fatal wrapper
-func Fatal(args ...interface{}) {
-	baseLogger.sourced(true).Fatal(args...)
-}
-
-// Fatalf wrapper
-func Fatalf(format string, args ...interface{}) {
-	baseLogger.sourced(true).Fatalf(format, args...)
-}
-
-// WithField wrapper
-func WithField(key string, value interface{}) Logger {
-	return baseLogger.WithField(key, value)
-}
-
-// WithFields wrapper
-func WithFields(fields Fields) Logger {
-	return baseLogger.WithFields(fields)
-}
-
-// WithError wrapper
-func WithError(err error) Logger {
-	return baseLogger.WithError(err)
-}
-
-// WithMessage wrapper
-func WithMessage(msg string) Logger {
-	return baseLogger.WithMessage(msg)
-}
-
-// WithMessagef wrapper
-func WithMessagef(format string, args ...interface{}) Logger {
-	return baseLogger.WithMessagef(format, args...)
-}
-
 // Module wrapper
 func Module(name string) Logger {
-	return baseLogger.WithField("prefix", name)
+	return _baseLogger.WithField("prefix", name)
 }
