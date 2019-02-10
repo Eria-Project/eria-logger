@@ -46,8 +46,9 @@ func init() {
 
 }
 
-func setParams() {
+func setParams() { // TO DO (make it more elegant)
 	if !_paramsSet {
+		_paramsSet = true
 		if !flag.Parsed() {
 			flag.Parse()
 		}
@@ -59,7 +60,6 @@ func setParams() {
 
 		Module("logger").WithField("path", *_logFile).Info("Set log file")
 		Module("logger").WithField("level", *_logLevel).Info("Set log level")
-		_paramsSet = true
 	}
 }
 
@@ -209,5 +209,6 @@ func (l logger) WithMessagef(format string, args ...interface{}) Logger {
 
 // Module wrapper
 func Module(name string) Logger {
+	setParams()
 	return _baseLogger.WithField("prefix", name)
 }
