@@ -55,10 +55,9 @@ func setParams() { // TO DO (make it more elegant)
 
 		if *_logFile != "" {
 			SetFile(*_logFile)
+			Module("logger").WithField("path", *_logFile).Info("Set log file")
 		}
 		SetLevel(*_logLevel)
-
-		Module("logger").WithField("path", *_logFile).Info("Set log file")
 		Module("logger").WithField("level", *_logLevel).Info("Set log level")
 	}
 }
