@@ -1,4 +1,4 @@
-module github.com/project-eria/logger
+module github.com/project-eria/eria-logger
 
 go 1.12
 
